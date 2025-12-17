@@ -8,3 +8,9 @@ pluginManagement {
 }
 
 rootProject.name = "tasktracker"
+
+// Subprojects
+include(":app")
+include(":shared")
+include(":mcp-server")
+include(":notifier")
