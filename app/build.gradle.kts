@@ -59,3 +59,9 @@ compose.desktop {
 kotlin {
     jvmToolchain(17)
 }
+
+sourceSets {
+    main {
+        kotlin.srcDirs("main/kotlin")
+    }
+}

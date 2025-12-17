@@ -1,0 +1,61 @@
+package com.tasktracker.data.repository
+
+import com.tasktracker.data.model.Task
+import com.tasktracker.data.model.TaskStatus
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+
+class TaskRepository(private val storage: JsonTaskStorage) {
+    private val _tasks = MutableStateFlow<List<Task>>(emptyList())
+    val tasks: StateFlow<List<Task>> = _tasks.asStateFlow()
+
+    suspend fun loadTasks() {
+        val loadedTasks = storage.loadTasks()
+        _tasks.value = loadedTasks
+    }
+
+    suspend fun addTask(task: Task) {
+        val updatedTasks = _tasks.value + task
+        _tasks.value = updatedTasks
+        storage.saveTasks(updatedTasks)
+    }
+
+    suspend fun deleteTask(taskId: String) {
+        val updatedTasks = _tasks.value.filterNot { it.id == taskId }
+        _tasks.value = updatedTasks
+        storage.saveTasks(updatedTasks)
+    }
+
+    suspend fun toggleTaskStatus(taskId: String) {
+        val updatedTasks = _tasks.value.map { task ->
+            if (task.id == taskId) {
+                val newStatus = if (task.status == TaskStatus.PENDING) {
+                    TaskStatus.COMPLETED
+                } else {
+                    TaskStatus.PENDING
+                }
+                task.copy(
+                    status = newStatus,
+                    stateChangedAt = kotlinx.datetime.Clock.System.now()
+                )
+            } else {
+                task
+            }
+        }
+        _tasks.value = updatedTasks
+        storage.saveTasks(updatedTasks)
+    }
+
+    suspend fun updateTask(updatedTask: Task) {
+        val updatedTasks = _tasks.value.map { task ->
+            if (task.id == updatedTask.id) {
+                updatedTask
+            } else {
+                task
+            }
+        }
+        _tasks.value = updatedTasks
+        storage.saveTasks(updatedTasks)
+    }
+}

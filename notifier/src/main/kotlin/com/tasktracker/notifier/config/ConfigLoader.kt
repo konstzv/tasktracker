@@ -56,7 +56,7 @@ object ConfigLoader {
                 # Set it with: export PERPLEXITY_API_KEY='your-api-key-here'
 
                 mcp {
-                  serverJarPath = "$userHome/StudioProjects/tasktracker/mcp-server/build/libs/mcp-server-1.0.0.jar"
+                  serverJarPath = "$userHome/IdeaProjects/tasktracker/mcp-server/build/libs/mcp-server-1.0.0.jar"
                 }
 
                 schedule {

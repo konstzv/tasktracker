@@ -137,14 +137,14 @@ fun TaskItem(
                         color = GlassColors.TextTertiary
                     )
 
-                    if (task.stateChangedAt != null) {
+                    task.stateChangedAt?.let { stateChangedAt ->
                         Text(
                             text = "•",
                             fontSize = 12.sp,
                             color = GlassColors.TextTertiary
                         )
                         Text(
-                            text = "Updated: ${formatDate(task.stateChangedAt.toLocalDateTime(TimeZone.currentSystemDefault()))}",
+                            text = "Updated: ${formatDate(stateChangedAt.toLocalDateTime(TimeZone.currentSystemDefault()))}",
                             fontSize = 12.sp,
                             color = GlassColors.TextTertiary
                         )
