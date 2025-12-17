@@ -1,0 +1,38 @@
+# Gradle
+.gradle/
+build/
+gradle-app.setting
+!gradle-wrapper.jar
+!gradle-wrapper.properties
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+# Eclipse
+.project
+.classpath
+.settings/
+bin/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Kotlin
+*.class
+*.log
+*.jar
+*.war
+*.ear
+
+# Compose Desktop
+*.dmg
+*.pkg
+
+# Local
+local.properties
