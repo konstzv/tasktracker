@@ -1,5 +1,6 @@
 package com.tasktracker.notifier.api
 
+import com.tasktracker.notifier.api.models.Message
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
@@ -18,12 +19,6 @@ data class PerplexityRequest(
     val messages: List<Message>,
     val temperature: Double = 0.2,
     val max_tokens: Int = 1000
-)
-
-@Serializable
-data class Message(
-    val role: String,
-    val content: String
 )
 
 @Serializable

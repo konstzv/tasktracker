@@ -1,5 +1,7 @@
 package com.tasktracker.notifier
 
+import com.tasktracker.mcp.protocol.McpToolDefinitions
+import com.tasktracker.notifier.api.AgenticPerplexityClient
 import com.tasktracker.notifier.api.PerplexityClient
 import com.tasktracker.notifier.config.ConfigLoader
 import com.tasktracker.notifier.mcp.McpClient
@@ -32,6 +34,7 @@ class TaskNotifierApp {
             val tasksMcpClient = McpClient(config.mcpServerJarPath, McpClient.ServerType.JAR)
             val notificationMcpClient = McpClient(config.notificationMcpServerPath, McpClient.ServerType.NODE)
             val perplexityClient = PerplexityClient(config.perplexityApiKey)
+            val agenticClient = AgenticPerplexityClient(config.perplexityApiKey)
 
             try {
                 // Start MCP clients
@@ -75,52 +78,96 @@ class TaskNotifierApp {
                     return@runBlocking
                 }
 
-                val taskData = try {
-                    tasksMcpClient.callTool("list_tasks")
-                } catch (e: Exception) {
-                    logger.error(e) { "Failed to retrieve tasks" }
-                    notificationClient.showNotification(
-                        title = "TaskTracker Task Error",
-                        content = "Failed to get tasks: ${e.message}",
-                        icon = "/System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/AlertStopIcon.icns",
-                        sound = NotificationClient.Sound.BASSO
-                    )
-                    tasksMcpClient.close()
-                    notificationMcpClient.close()
-                    return@runBlocking
-                }
+                // Get AI insights using agentic or simple workflow
+                logger.info { "Using ${if (config.agenticMode) "agentic" else "simple"} workflow" }
 
-                logger.info { "Retrieved tasks:\n$taskData" }
+                val insights = if (config.agenticMode) {
+                    // NEW: Agentic workflow with autonomous tool calling
+                    try {
+                        val tools = McpToolDefinitions.getAllTools()
 
-                // Skip if no tasks
-                if (taskData.contains("No tasks found")) {
-                    logger.info { "No tasks to analyze" }
-                    notificationClient.showNotification(
-                        title = "TaskTracker",
-                        content = "No tasks found to analyze",
-                        icon = "/System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/ToolbarInfo.icns",
-                        sound = NotificationClient.Sound.TINK
-                    )
-                    tasksMcpClient.close()
-                    notificationMcpClient.close()
-                    return@runBlocking
-                }
+                        logger.info { "Starting agentic workflow with ${tools.size} tools" }
 
-                // Get AI insights
-                logger.info { "Requesting Perplexity analysis..." }
-                val insights = try {
-                    perplexityClient.analyzeTaskInsights(taskData)
-                } catch (e: Exception) {
-                    logger.error(e) { "Perplexity API error" }
-                    notificationClient.showNotification(
-                        title = "TaskTracker Perplexity Error",
-                        content = "API Error: ${e.message}",
-                        icon = "/System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/AlertCautionIcon.icns",
-                        sound = NotificationClient.Sound.BASSO
-                    )
-                    tasksMcpClient.close()
-                    notificationMcpClient.close()
-                    return@runBlocking
+                        val result = agenticClient.runAgenticWorkflow(
+                            initialPrompt = "Analyze my tasks and provide actionable insights",
+                            availableTools = tools,
+                            mcpClient = tasksMcpClient,
+                            maxIterations = config.maxIterations
+                        )
+
+                        logger.info {
+                            "Agentic workflow completed: ${result.iterations} iterations, " +
+                            "${result.toolCallsExecuted.size} tools called, " +
+                            "reason: ${result.terminationReason}"
+                        }
+
+                        result.finalResponse
+
+                    } catch (e: Exception) {
+                        logger.error(e) { "Agentic workflow failed, falling back to simple mode" }
+                        // Fallback to simple mode
+                        try {
+                            val taskData = tasksMcpClient.callTool("list_tasks")
+                            if (taskData.contains("No tasks found")) {
+                                "No tasks found to analyze"
+                            } else {
+                                perplexityClient.analyzeTaskInsights(taskData)
+                            }
+                        } catch (fallbackError: Exception) {
+                            logger.error(fallbackError) { "Fallback also failed" }
+                            "Error: Unable to analyze tasks"
+                        }
+                    }
+                } else {
+                    // EXISTING: Simple workflow (backward compatibility)
+                    logger.info { "Using simple workflow" }
+                    val taskData = try {
+                        tasksMcpClient.callTool("list_tasks")
+                    } catch (e: Exception) {
+                        logger.error(e) { "Failed to retrieve tasks" }
+                        notificationClient.showNotification(
+                            title = "TaskTracker Task Error",
+                            content = "Failed to get tasks: ${e.message}",
+                            icon = "/System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/AlertStopIcon.icns",
+                            sound = NotificationClient.Sound.BASSO
+                        )
+                        tasksMcpClient.close()
+                        notificationMcpClient.close()
+                        return@runBlocking
+                    }
+
+                    logger.info { "Retrieved tasks:\n$taskData" }
+
+                    // Skip if no tasks
+                    if (taskData.contains("No tasks found")) {
+                        logger.info { "No tasks to analyze" }
+                        notificationClient.showNotification(
+                            title = "TaskTracker",
+                            content = "No tasks found to analyze",
+                            icon = "/System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/ToolbarInfo.icns",
+                            sound = NotificationClient.Sound.TINK
+                        )
+                        tasksMcpClient.close()
+                        notificationMcpClient.close()
+                        return@runBlocking
+                    }
+
+                    // Get AI insights
+                    logger.info { "Requesting Perplexity analysis..." }
+                    try {
+                        perplexityClient.analyzeTaskInsights(taskData)
+                    } catch (e: Exception) {
+                        logger.error(e) { "Perplexity API error" }
+                        notificationClient.showNotification(
+                            title = "TaskTracker Perplexity Error",
+                            content = "API Error: ${e.message}",
+                            icon = "/System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/AlertCautionIcon.icns",
+                            sound = NotificationClient.Sound.BASSO
+                        )
+                        tasksMcpClient.close()
+                        notificationMcpClient.close()
+                        return@runBlocking
+                    }
                 }
 
                 logger.info { "Received insights:\n$insights" }
