@@ -3,7 +3,7 @@ package com.tasktracker.notifier
 import com.tasktracker.notifier.api.PerplexityClient
 import com.tasktracker.notifier.config.ConfigLoader
 import com.tasktracker.notifier.mcp.McpClient
-import com.tasktracker.notifier.platform.MacOsNotifier
+import com.tasktracker.notifier.notification.NotificationClient
 import kotlinx.coroutines.runBlocking
 import mu.KotlinLogging
 
@@ -11,8 +11,6 @@ class TaskNotifierApp {
     private val logger = KotlinLogging.logger {}
 
     fun run() = runBlocking {
-        val notifier = MacOsNotifier()
-
         try {
             logger.info { "TaskTracker Notifier starting..." }
 
@@ -21,11 +19,7 @@ class TaskNotifierApp {
                 ConfigLoader.load()
             } catch (e: Exception) {
                 logger.error(e) { "Configuration error" }
-                notifier.showNotification(
-                    title = "TaskTracker Config Error",
-                    message = e.message ?: "Failed to load configuration",
-                    subtitle = "❌ Configuration Error"
-                )
+                // Cannot send notification if config failed to load
                 return@runBlocking
             }
 
@@ -35,33 +29,64 @@ class TaskNotifierApp {
             }
 
             // Initialize clients
-            val mcpClient = McpClient(config.mcpServerJarPath)
+            val tasksMcpClient = McpClient(config.mcpServerJarPath, McpClient.ServerType.JAR)
+            val notificationMcpClient = McpClient(config.notificationMcpServerPath, McpClient.ServerType.NODE)
             val perplexityClient = PerplexityClient(config.perplexityApiKey)
 
             try {
-                // Start MCP client and get tasks
+                // Start MCP clients
                 try {
-                    mcpClient.start()
-                    logger.info { "MCP client connected" }
+                    println("[DEBUG] Starting notification MCP client...")
+                    notificationMcpClient.start()
+                    println("[DEBUG] Notification MCP client start() completed")
+                    logger.info { "Notification MCP client connected" }
                 } catch (e: Exception) {
-                    logger.error(e) { "MCP connection error" }
-                    notifier.showNotification(
+                    logger.error(e) { "Notification MCP connection error" }
+                    return@runBlocking
+                }
+
+                println("[DEBUG] Creating NotificationClient...")
+                val notificationClient = NotificationClient(notificationMcpClient)
+                println("[DEBUG] NotificationClient created")
+
+                // Send test notification to confirm MCP is working
+                println("[DEBUG] About to send test notification...")
+                logger.info { "Sending test notification..." }
+                notificationClient.showNotification(
+                    title = "TaskTracker Started",
+                    content = "Notification system initialized successfully",
+                    icon = "/System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/ToolbarInfo.icns",
+                    sound = NotificationClient.Sound.PING
+                )
+                logger.info { "Test notification sent" }
+
+                try {
+                    tasksMcpClient.start()
+                    logger.info { "Tasks MCP client connected" }
+                } catch (e: Exception) {
+                    logger.error(e) { "Tasks MCP connection error" }
+                    notificationClient.showNotification(
                         title = "TaskTracker MCP Error",
-                        message = "Failed to start MCP server: ${e.message}",
-                        subtitle = "❌ MCP Connection Error"
+                        content = "Failed to start tasks MCP server: ${e.message}",
+                        icon = "/System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/AlertStopIcon.icns",
+                        sound = NotificationClient.Sound.BASSO
                     )
+                    notificationMcpClient.close()
                     return@runBlocking
                 }
 
                 val taskData = try {
-                    mcpClient.callTool("list_tasks")
+                    tasksMcpClient.callTool("list_tasks")
                 } catch (e: Exception) {
                     logger.error(e) { "Failed to retrieve tasks" }
-                    notifier.showNotification(
+                    notificationClient.showNotification(
                         title = "TaskTracker Task Error",
-                        message = "Failed to get tasks: ${e.message}",
-                        subtitle = "❌ Task Retrieval Error"
+                        content = "Failed to get tasks: ${e.message}",
+                        icon = "/System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/AlertStopIcon.icns",
+                        sound = NotificationClient.Sound.BASSO
                     )
+                    tasksMcpClient.close()
+                    notificationMcpClient.close()
                     return@runBlocking
                 }
 
@@ -70,11 +95,14 @@ class TaskNotifierApp {
                 // Skip if no tasks
                 if (taskData.contains("No tasks found")) {
                     logger.info { "No tasks to analyze" }
-                    notifier.showNotification(
+                    notificationClient.showNotification(
                         title = "TaskTracker",
-                        message = "No tasks found to analyze",
-                        subtitle = "ℹ️ No Tasks"
+                        content = "No tasks found to analyze",
+                        icon = "/System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/ToolbarInfo.icns",
+                        sound = NotificationClient.Sound.TINK
                     )
+                    tasksMcpClient.close()
+                    notificationMcpClient.close()
                     return@runBlocking
                 }
 
@@ -84,37 +112,38 @@ class TaskNotifierApp {
                     perplexityClient.analyzeTaskInsights(taskData)
                 } catch (e: Exception) {
                     logger.error(e) { "Perplexity API error" }
-                    notifier.showNotification(
+                    notificationClient.showNotification(
                         title = "TaskTracker Perplexity Error",
-                        message = "API Error: ${e.message}",
-                        subtitle = "❌ Perplexity API Error"
+                        content = "API Error: ${e.message}",
+                        icon = "/System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/AlertCautionIcon.icns",
+                        sound = NotificationClient.Sound.BASSO
                     )
+                    tasksMcpClient.close()
+                    notificationMcpClient.close()
                     return@runBlocking
                 }
 
                 logger.info { "Received insights:\n$insights" }
 
                 // Show notification
-                notifier.showNotification(
+                notificationClient.showNotification(
                     title = "Task Insights",
-                    message = insights,
-                    subtitle = "✨ TaskTracker Analysis"
+                    content = insights,
+                    icon = "/System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/BookmarkIcon.icns",
+                    sound = NotificationClient.Sound.GLASS
                 )
 
                 logger.info { "Notification sent successfully" }
 
             } finally {
-                mcpClient.close()
+                tasksMcpClient.close()
+                notificationMcpClient.close()
             }
 
         } catch (e: Exception) {
             // Catch-all for any unexpected errors
             logger.error(e) { "Unexpected error in notifier app" }
-            notifier.showNotification(
-                title = "TaskTracker Unexpected Error",
-                message = "Unexpected error: ${e.message}",
-                subtitle = "❌ Error"
-            )
+            // Note: Cannot send notification here if MCP client failed to initialize
         }
     }
 }

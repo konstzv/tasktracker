@@ -6,6 +6,7 @@ import java.io.File
 data class NotifierConfig(
     val perplexityApiKey: String,
     val mcpServerJarPath: String,
+    val notificationMcpServerPath: String,
     val intervalMinutes: Int,
     val notificationsEnabled: Boolean
 )
@@ -42,6 +43,7 @@ object ConfigLoader {
         return NotifierConfig(
             perplexityApiKey = apiKey,
             mcpServerJarPath = notifierConfig.getString("mcp.serverJarPath"),
+            notificationMcpServerPath = notifierConfig.getString("mcp.notificationServerPath"),
             intervalMinutes = notifierConfig.getInt("schedule.intervalMinutes"),
             notificationsEnabled = notifierConfig.getBoolean("notifications.enabled")
         )
@@ -57,6 +59,7 @@ object ConfigLoader {
 
                 mcp {
                   serverJarPath = "$userHome/IdeaProjects/tasktracker/mcp-server/build/libs/mcp-server-1.0.0.jar"
+                  notificationServerPath = "$userHome/IdeaProjects/mcp-notifications/build/index.js"
                 }
 
                 schedule {

@@ -34,6 +34,13 @@ class McpServer {
 
                 try {
                     val request = json.decodeFromString<JsonRpcRequest>(line)
+
+                    // Skip notifications (requests without id) - no response needed
+                    if (request.id == null) {
+                        logger.debug { "Received notification (no response needed): ${request.method}" }
+                        continue
+                    }
+
                     val response = requestHandler.handleRequest(request)
                     val responseJson = json.encodeToString(
                         kotlinx.serialization.serializer(),

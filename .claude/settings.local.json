@@ -3,7 +3,11 @@
     "allow": [
       "Bash(gradle wrapper:*)",
       "Bash(./gradlew:*)",
-      "Bash(./build-all.sh)"
+      "Bash(./build-all.sh)",
+      "Bash(cat:*)",
+      "Bash(echo $PERPLEXITY_API_KEY)",
+      "Bash(node:*)",
+      "Bash(java -jar:*)"
     ],
     "deny": [],
     "ask": []
